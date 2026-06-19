@@ -26,11 +26,8 @@ bskills logout                      # clears the stored token
 bskills whoami                      # shows the current user
 ```
 
-Login is **browser-only** — there is no headless / API-key flag. The only
-option is `--timeout <seconds>` (default `300`), which bounds how long the CLI
-waits for the browser callback before failing with `Login timed out after
-<n>s.`. For non-interactive contexts, log in once interactively; the persisted
-token is then reused on later invocations.
+Browser-only — there is no headless / API-key flag. Log in interactively once;
+the persisted token is reused afterward.
 
 Auth state lives in `~/.bskills-cli/config.json`. If the user has no token,
 `whoami`, `acquire`, `pay`, `install`, and `installed --remote` will fail
@@ -49,20 +46,13 @@ bskills init
   --json
 ```
 
-Bootstraps a **free** skill end-to-end in one command: (1) ensures an
-authenticated session — reuses the stored token, or runs the browser login if
-there is none; (2) resolves `--slug` (default the BuySkills marketplace skill,
-`buyskills-ai-bskills-cli-skill`) and acquires it if not already owned; (3)
-installs it to every detected agent (or the `-a` targets).
+Free-skill bootstrap in one shot: ensure a session (browser login if none),
+acquire `--slug` if unowned, then install to detected agents.
 
-- **Free skills only.** A paid slug errors: ``"<name>" costs <cents>¢ — init
-  only bootstraps free skills. Use `bskills pay <slug>`.``
-- **Browser caveat.** With no valid session it opens a browser — treat it like
-  `login` and don't fire it autonomously. In `--json` mode interactive login is
-  incompatible with clean stdout, so a missing session is a hard error: exit
-  `3`, ``Not logged in. Run `bskills login` before `init --json` …``.
-- Exit `1` when no agents are detected, the skill is paid, or install fails on
-  every agent. The `--json` report shape is in `references/output-schemas.md`.
+- Treat it like `login` — it may open a browser, so don't fire it autonomously.
+- `--json` can't run interactive login: a missing session is a hard error
+  (exit `3`). Report shape in `references/output-schemas.md`.
+- Exit `1` if the slug is paid, no agents are detected, or all installs fail.
 
 ## Doctor (read-only preflight)
 
@@ -191,14 +181,10 @@ bskills install <slug-or-uuid>
 
 - The user must **own** the skill first (via `acquire` or `pay`). If they
   don't, the command errors and suggests the right previous step.
-- `global` scope writes to **each agent's own** global skills dir — this is
-  agent-specific, **not** a uniform `~/.{agent}/skills` template. Most agents
-  follow `~/.{id}/skills` (Claude Code → `~/.claude/skills`), but several
-  differ: Windsurf → `~/.codeium/windsurf/skills`, OpenCode →
-  `~/.config/opencode/skills`, Zed → `~/.config/zed/skills`, GitHub Copilot →
-  `~/.copilot/skills`, PearAI → `~/.pearai/skills`. Read the authoritative path
-  from `bskills agents --json` (the `globalSkillsPath` field) rather than
-  constructing it. `project` scope writes to `<cwd>/<agent-project-dir>/skills`.
+- `global` writes to each agent's own skills dir — agent-specific, **not** a
+  uniform `~/.{id}/skills` (e.g. Windsurf → `~/.codeium/windsurf/skills`). Read
+  the real path from `bskills agents --json` (`globalSkillsPath`); don't
+  construct it. `project` writes to `<cwd>/<agent-project-dir>/skills`.
 - `copy` duplicates files; `symlink` links to the shared cache at
   `~/.cache/bskills-cli/repos/<repo>`.
 
@@ -281,12 +267,6 @@ switch; respect that.
 bskills self-update [--json]
 ```
 
-Upgrades the CLI binary itself by running `npm install -g bskills@latest`.
-**An agent must not run this autonomously** — it mutates global npm state, may
-require elevated permissions (`sudo`), and on a `npm link`-ed dev checkout it
-replaces the link with a published install. When the CLI prints an
-"update available" notice, surface it to the human and let *them* run it. On
-failure it errors with ``Self-update failed: <detail>. You may need elevated
-permissions — try `sudo npm install -g bskills@latest`, or reinstall
-manually.`` The `--json` success shape is
-`{ "ok": true, "package": "bskills", "updatedFrom": "<current version>" }`.
+Upgrades the CLI itself via `npm install -g bskills@latest`. **Operator action —
+an agent must not run this autonomously** (mutates global npm state, may need
+`sudo`). Surface the CLI's "update available" notice to the human instead.
