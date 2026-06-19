@@ -4,10 +4,6 @@ When a command errors mid-flow, look up the message here for the cause and
 the exact next action. If the message you see isn't listed, fall back to
 the human and surface the raw error rather than guessing.
 
-> The command is invoked as `bskills` here, but the CLI's own messages may still
-> print the legacy `bskills-cli` token (same tool). Match a row on its
-> distinctive message text, not on the command name.
-
 ## Settle exit codes — recovery contract
 
 The settle call (`bskills pay <slug> --signature-hex <hex>`) communicates

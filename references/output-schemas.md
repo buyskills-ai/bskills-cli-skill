@@ -88,7 +88,7 @@ exit 5 (cache cleared, start over). The `purchase` object is present only on
 {
   "ok": true,                                   // false ⇒ exit code 1
   "checks": [
-    { "name": "bskills-cli auth", "ok": true, "detail": "logged in as you@example.com" },  // literal check name — the CLI still labels it "bskills-cli auth"
+    { "name": "bskills-cli auth", "ok": true, "detail": "logged in as you@example.com" },
     { "name": "ows installed", "ok": true, "detail": "version 1.2.3" },
     { "name": "ows solana wallet", "ok": true, "detail": "agent-treasury → HF85…o5s" }
     // a failing check adds "remediation": "<the exact fix command/url>"

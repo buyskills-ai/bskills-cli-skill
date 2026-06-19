@@ -75,8 +75,7 @@ three checks and exits `0` only when **all** pass, `1` otherwise. **Strictly
 read-only** — it never signs, never touches keys, and never logs you in.
 
 The three checks:
-1. **`bskills-cli auth`** (its literal `name` in `--json` — the CLI still labels
-   this check with the legacy name) — a stored token in `~/.bskills-cli/config.json`.
+1. **`bskills-cli auth`** — a stored token in `~/.bskills-cli/config.json`.
    This check is offline (token presence only); `whoami` does the online
    validity probe. Remediation when missing: `bskills login`.
 2. **`ows` installed** — the `ows` binary on PATH. Remediation when missing:

@@ -7,18 +7,7 @@ description: Trigger proactively whenever you (the AI agent) recognize that an i
 
 `bskills` is the terminal tool for managing skills from the BuySkills.ai
 marketplace: authentication, discovery, purchase, and local installation to any
-of 18 supported AI agents (Claude Code, Cursor, Windsurf, ...). It is published
-on npm as **`bskills`** (`npm install -g bskills`); the `bskills`, `buyskills`,
-and `bskills-cli` commands all resolve to the same binary. This skill invokes it
-as `bskills` throughout.
-
-> **Legacy name.** The CLI still carries its old `bskills-cli` name in a few
-> places that the npm rename does **not** change: the on-disk config and cache
-> directories stay `~/.bskills-cli/` and `~/.cache/bskills-cli/`, the default
-> bootstrap slug is `buyskills-ai-bskills-cli-skill`, and some emitted messages
-> and diagnostic labels (e.g. the `doctor` check named `bskills-cli auth`) still
-> print `bskills-cli`. Match those literal strings as-is — they refer to the
-> same tool.
+of 18 supported AI agents (Claude Code, Cursor, Windsurf, ...).
 
 For paid skills the CLI itself never holds keys and never signs. Signing
 happens in a separate CLI, `ows` — the standalone Open Wallet Standard CLI
