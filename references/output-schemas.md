@@ -3,7 +3,7 @@
 Use `--json` and parse. Below are the (trimmed) shapes for the commands that
 agents most commonly need to introspect.
 
-## `bskills-cli search --json`
+## `bskills search --json`
 
 ```jsonc
 {
@@ -14,6 +14,8 @@ agents most commonly need to introspect.
       "displayName": "...",
       "priceCents": 799,                  // 0 means free → use `acquire` not `pay`
       "type": "skill",                    // or "plugin"
+      "status": "published",              // only purchasable when "published"
+      "mainCategory": "developer-tools",  // nullable
       "averageRating": 4.7,
       "totalRatings": 23,
       "creator": { "githubUsername": "alice" }
@@ -25,7 +27,7 @@ agents most commonly need to introspect.
 }
 ```
 
-## `bskills-cli pay <slug> --wallet <pubkey> --json` (initiate)
+## `bskills pay <slug> --wallet <pubkey> --json` (initiate)
 
 The hex you feed to `ows sign tx` is the **flat, top-level `transactionHex`**
 field. Extract it inline: `... --json | python3 -c "import sys,json;
@@ -55,7 +57,7 @@ print(json.load(sys.stdin)['transactionHex'])"`.
 // { "phase": "initiate", "outcome": "owned" }
 ```
 
-## `bskills-cli pay <slug> --signature-hex <hex> --json` (settle)
+## `bskills pay <slug> --signature-hex <hex> --json` (settle)
 
 `outcome` plus the exit code drives recovery (see `references/commands.md` /
 `references/troubleshooting.md`): `done`/`owned` ⇒ exit 0; `auth` ⇒ exit 3
@@ -80,7 +82,7 @@ exit 5 (cache cleared, start over). The `purchase` object is present only on
 }
 ```
 
-## `bskills-cli doctor --json`
+## `bskills doctor --json`
 
 ```jsonc
 {
@@ -94,7 +96,7 @@ exit 5 (cache cleared, start over). The `purchase` object is present only on
 }
 ```
 
-## `bskills-cli install --json`
+## `bskills install --json`
 
 ```jsonc
 {
@@ -110,7 +112,34 @@ exit 5 (cache cleared, start over). The `purchase` object is present only on
 }
 ```
 
-## `bskills-cli installed --remote --json`
+## `bskills init --json`
+
+One-shot bootstrap report. `ok` is `false` (and exit code `1`) when install
+succeeded on no agent. In `--json` mode a missing session is a hard error
+(exit `3`), not a field here.
+
+```jsonc
+{
+  "ok": true,                                   // false ⇒ exit 1 (no agent installed)
+  "skill": { "slug": "...", "displayName": "...", "id": "..." },
+  "auth": {
+    "status": "existing",                       // "existing" (token reused) | "logged-in" (fresh browser login)
+    "user": "alice"                             // optional
+  },
+  "acquire": {
+    "status": "already-owned",                  // "already-owned" | "acquired"
+    "purchaseId": "..."                         // present only when status === "acquired"
+  },
+  "install": {
+    "installed": [
+      { "success": true, "skillName": "...", "agentId": "claude-code", "targetPath": "..." }
+    ],
+    "failed": []                                // failed entries carry an "error" field
+  }
+}
+```
+
+## `bskills installed --remote --json`
 
 ```jsonc
 {
@@ -128,13 +157,12 @@ exit 5 (cache cleared, start over). The `purchase` object is present only on
     {
       "slug": "code-review",
       "displayName": "Code Reviewer",
-      "status": "completed",                    // owned skills have status: "completed"
+      "status": "completed",                    // server-supplied free-form string — treat any non-pending status as owned rather than hardcoding "completed"
       "amount": 0
     }
   ]
 }
 ```
 
-To find owned-but-not-installed skills, filter `remote[*]` where
-`status === "completed"` and no entry in `installations[*]` has a matching
-`skillName` for the slug.
+To find owned-but-not-installed skills, filter `remote[*]` with a non-pending
+`status` (owned) and no matching `skillName` in `installations[*]`.

@@ -1,4 +1,4 @@
-# bskills-cli command reference
+# bskills command reference
 
 Full flag list and behavioral nuance for each command. Consult this when
 SKILL.md's command summary isn't enough — for example, when you need to
@@ -9,10 +9,10 @@ All commands exit with:
 - `0` — success.
 - `1` — user/validation error.
 - `2` — network error.
-- `3` — not logged in (run `bskills-cli login` first).
+- `3` — not logged in (run `bskills login` first).
 
 `pay --signature-hex` (settle) additionally uses exit codes `4` and `5` — see
-the Pay section for the full settle recovery contract.
+`references/troubleshooting.md` for the settle recovery contract.
 
 Every read/list command accepts `--json` and prints a structured payload on
 stdout. Prefer `--json` when you need to parse results programmatically.
@@ -20,21 +20,44 @@ stdout. Prefer `--json` when you need to parse results programmatically.
 ## Auth
 
 ```bash
-bskills-cli login                     # opens a browser, persists an API key
-bskills-cli login --api-key a2ax_xxx  # headless: paste an existing API key
-bskills-cli logout                    # clears the stored token
-bskills-cli whoami                    # shows the current user
+bskills login                       # opens a browser for GitHub OAuth, persists a token
+bskills login --timeout <seconds>   # bound the browser-callback wait (default 300)
+bskills logout                      # clears the stored token
+bskills whoami                      # shows the current user
 ```
+
+Browser-only — there is no headless / API-key flag. Log in interactively once;
+the persisted token is reused afterward.
 
 Auth state lives in `~/.bskills-cli/config.json`. If the user has no token,
 `whoami`, `acquire`, `pay`, `install`, and `installed --remote` will fail
-with exit code `3`. Suggest `bskills-cli login` in that case — never run it
+with exit code `3`. Suggest `bskills login` in that case — never run it
 silently.
+
+## Init (one-shot bootstrap)
+
+```bash
+bskills init
+  --slug <slug>                # default: buyskills-ai-bskills-cli-skill
+  -a, --agent <id>             # repeatable; default: all detected agents
+  -s, --scope <global|project> # default: config defaultScope (factory: global)
+  -m, --mode <copy|symlink>    # default: config defaultInstallMode (factory: copy)
+  --timeout <seconds>          # browser-login timeout; default 300
+  --json
+```
+
+Free-skill bootstrap in one shot: ensure a session (browser login if none),
+acquire `--slug` if unowned, then install to detected agents.
+
+- Treat it like `login` — it may open a browser, so don't fire it autonomously.
+- `--json` can't run interactive login: a missing session is a hard error
+  (exit `3`). Report shape in `references/output-schemas.md`.
+- Exit `1` if the slug is paid, no agents are detected, or all installs fail.
 
 ## Doctor (read-only preflight)
 
 ```bash
-bskills-cli doctor [--wallet <name>] [--json]
+bskills doctor [--wallet <name>] [--json]
 ```
 
 Diagnoses whether the environment is ready for the paid-purchase flow. Runs
@@ -42,9 +65,9 @@ three checks and exits `0` only when **all** pass, `1` otherwise. **Strictly
 read-only** — it never signs, never touches keys, and never logs you in.
 
 The three checks:
-1. **`bskills-cli` auth** — a stored token in `~/.bskills-cli/config.json`.
+1. **`bskills-cli auth`** — a stored token in `~/.bskills-cli/config.json`.
    This check is offline (token presence only); `whoami` does the online
-   validity probe. Remediation when missing: `bskills-cli login`.
+   validity probe. Remediation when missing: `bskills login`.
 2. **`ows` installed** — the `ows` binary on PATH. Remediation when missing:
    `npm install -g @open-wallet-standard/core` (the standalone Open Wallet
    Standard CLI — NOT the unrelated `ows` npm squatter; see https://openwallet.sh).
@@ -63,7 +86,7 @@ and still sets exit `1` when `ok === false`.
 ## Search
 
 ```bash
-bskills-cli search [query]
+bskills search [query]
   -t, --type <skill|plugin>   # omit to show both
   -c, --category <slug>
   --min-price <cents>         # integer, 0 means free
@@ -83,7 +106,7 @@ bskills-cli search [query]
 ## Acquire (free skills only)
 
 ```bash
-bskills-cli acquire <slug-or-uuid> [--json]
+bskills acquire <slug-or-uuid> [--json]
 ```
 
 Only works for skills where `priceCents === 0`. The CLI resolves slug → UUID
@@ -93,12 +116,12 @@ skill becomes installable.
 ## Pay (direct-USDC-split, server-side broadcast)
 
 ```bash
-bskills-cli pay <slug-or-uuid> --wallet <solana-pubkey>      [--json]   # 1. initiate
-bskills-cli pay <slug-or-uuid> --signature-hex <hex>         [--json]   # 2. settle
+bskills pay <slug-or-uuid> --wallet <solana-pubkey>      [--json]   # 1. initiate
+bskills pay <slug-or-uuid> --signature-hex <hex>         [--json]   # 2. settle
 ```
 
 The CLI never holds keys and never signs. The agent only orchestrates `ows`
-(for signing) between the two `bskills-cli pay` calls. Both calls are plain
+(for signing) between the two `bskills pay` calls. Both calls are plain
 JSON over HTTPS, with no special payment headers.
 
 - **Initiate** (`--wallet <pubkey>`): hits `POST /api/pay/initiate` with body
@@ -127,46 +150,36 @@ JSON over HTTPS, with no special payment headers.
 - Keep the **same logged-in user** across initiate → settle; the cache is keyed
   by pluginId for the current user.
 
-### Settle exit codes — recovery contract
+### Settle exit codes
 
-This table is authoritative and matches `references/troubleshooting.md`. Branch
-on the exit code:
-
-| Exit | Outcome | Cache | What to do |
-|---|---|---|---|
-| `0` | `done` / `owned` | cleared | Success. Surface the Solana Explorer link from `purchase.txSignature` + `purchase.network`. |
-| `2` | network error | kept | Transient. Re-run the **same** settle. |
-| `3` | `auth` (HTTP 401) | **kept** | Re-authenticate (`bskills-cli login`), then re-run settle with the **same** `--signature-hex`. Do not re-initiate or re-sign. |
-| `4` | `timeout` (HTTP 504 — broadcast but unconfirmed) | **kept** | Re-run the **same** `--signature-hex` to retry confirmation. Do **not** re-initiate, do **not** re-sign. |
-| `5` | `reinitiate` (HTTP 400 / expired blockhash / soft-expiry) | **cleared** | Re-initiate with `--wallet`, re-sign, settle. Start the flow over. |
-
-**Soft-expiry.** Before hitting the network, settle checks the cached entry's
-`expiresAt`. If it has passed, settle fails with exit `5` and the message
-``Cached payment for "<slug>" expired — re-initiate with `--wallet`.`` — same
-recovery as a server 400.
+Exit `0` (done/owned), `2` (network), `3` (auth), `4` (timeout — cache kept,
+retry the same `--signature-hex`), `5` (reinitiate — cache cleared, start over).
+Full recovery contract incl. soft-expiry: `references/troubleshooting.md`.
 
 ## Install
 
 ```bash
-bskills-cli install <slug-or-uuid>
+bskills install <slug-or-uuid>
   -a, --agent <id>             # repeatable; default: all detected agents
-  -s, --scope <global|project> # default: global
-  -m, --mode <copy|symlink>    # default: copy
+  -s, --scope <global|project> # default: config defaultScope (factory: global)
+  -m, --mode <copy|symlink>    # default: config defaultInstallMode (factory: copy)
   --force                      # re-pull the cached repo
   --json
 ```
 
 - The user must **own** the skill first (via `acquire` or `pay`). If they
   don't, the command errors and suggests the right previous step.
-- `global` scope writes to `~/.{agent}/skills/`; `project` writes to
-  `./<agent-project-dir>/skills/` relative to the current working directory.
+- `global` writes to each agent's own skills dir — agent-specific, **not** a
+  uniform `~/.{id}/skills` (e.g. Windsurf → `~/.codeium/windsurf/skills`). Read
+  the real path from `bskills agents --json` (`globalSkillsPath`); don't
+  construct it. `project` writes to `<cwd>/<agent-project-dir>/skills`.
 - `copy` duplicates files; `symlink` links to the shared cache at
   `~/.cache/bskills-cli/repos/<repo>`.
 
 ## Update (alias: upgrade)
 
 ```bash
-bskills-cli update <slug-or-name>
+bskills update <slug-or-name>
   -a, --agent <id>             # repeatable; default: every agent it's installed on
   -s, --scope <global|project>
   --json
@@ -182,7 +195,7 @@ filters that match nothing error with `No matching installations for
 ## Uninstall (alias: remove)
 
 ```bash
-bskills-cli uninstall <slug-or-name>
+bskills uninstall <slug-or-name>
   -a, --agent <id>             # repeatable; default: every agent it's installed on
   -s, --scope <global|project>
   --json
@@ -196,7 +209,7 @@ messages as `update`.
 ## Check what is installed
 
 ```bash
-bskills-cli installed [-a <agent>] [-s <scope>] [--remote] [--json]
+bskills installed [-a <agent>] [-s <scope>] [--remote] [--json]
 ```
 
 - Without `--remote`: reads `~/.bskills-cli/state.json`. Safe offline.
@@ -207,7 +220,7 @@ bskills-cli installed [-a <agent>] [-s <scope>] [--remote] [--json]
 ## Agents
 
 ```bash
-bskills-cli agents [--installed] [--json]
+bskills agents [--installed] [--json]
 ```
 
 Lists the 18 supported agents. `●` means the detection path exists on this
@@ -223,9 +236,9 @@ aider, codex, continue, void, pear, zed, trae, melty, aide, openclaw
 ## Config
 
 ```bash
-bskills-cli config list
-bskills-cli config get <key>
-bskills-cli config set <key> <value>
+bskills config list
+bskills config get <key>
+bskills config set <key> <value>
 ```
 
 Writable keys:
@@ -235,3 +248,13 @@ Writable keys:
 API URLs are **not** user-configurable. The CLI targets production
 (`https://api.buyskills.ai`) by default and has no user-facing environment
 switch; respect that.
+
+## Self-update (operator action — NOT an agent action)
+
+```bash
+bskills self-update [--json]
+```
+
+Upgrades the CLI itself via `npm install -g bskills@latest`. **Operator action —
+an agent must not run this autonomously** (mutates global npm state, may need
+`sudo`). Surface the CLI's "update available" notice to the human instead.
