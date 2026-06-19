@@ -12,7 +12,7 @@ All commands exit with:
 - `3` — not logged in (run `bskills login` first).
 
 `pay --signature-hex` (settle) additionally uses exit codes `4` and `5` — see
-the Pay section for the full settle recovery contract.
+`references/troubleshooting.md` for the settle recovery contract.
 
 Every read/list command accepts `--json` and prints a structured payload on
 stdout. Prefer `--json` when you need to parse results programmatically.
@@ -150,23 +150,11 @@ JSON over HTTPS, with no special payment headers.
 - Keep the **same logged-in user** across initiate → settle; the cache is keyed
   by pluginId for the current user.
 
-### Settle exit codes — recovery contract
+### Settle exit codes
 
-This table is authoritative and matches `references/troubleshooting.md`. Branch
-on the exit code:
-
-| Exit | Outcome | Cache | What to do |
-|---|---|---|---|
-| `0` | `done` / `owned` | cleared | Success. Surface the Solana Explorer link from `purchase.txSignature` + `purchase.network`. |
-| `2` | network error | kept | Transient. Re-run the **same** settle. |
-| `3` | `auth` (HTTP 401) | **kept** | Re-authenticate (`bskills login`), then re-run settle with the **same** `--signature-hex`. Do not re-initiate or re-sign. |
-| `4` | `timeout` (HTTP 504 — broadcast but unconfirmed) | **kept** | Re-run the **same** `--signature-hex` to retry confirmation. Do **not** re-initiate, do **not** re-sign. |
-| `5` | `reinitiate` (HTTP 400 / expired blockhash / soft-expiry) | **cleared** | Re-initiate with `--wallet`, re-sign, settle. Start the flow over. |
-
-**Soft-expiry.** Before hitting the network, settle checks the cached entry's
-`expiresAt`. If it has passed, settle fails with exit `5` and the message
-``Cached payment for "<slug>" expired — re-initiate with `--wallet`.`` — same
-recovery as a server 400.
+Exit `0` (done/owned), `2` (network), `3` (auth), `4` (timeout — cache kept,
+retry the same `--signature-hex`), `5` (reinitiate — cache cleared, start over).
+Full recovery contract incl. soft-expiry: `references/troubleshooting.md`.
 
 ## Install
 

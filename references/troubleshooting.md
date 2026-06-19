@@ -6,10 +6,8 @@ the human and surface the raw error rather than guessing.
 
 ## Settle exit codes — recovery contract
 
-The settle call (`bskills pay <slug> --signature-hex <hex>`) communicates
-the recovery path through its **exit code**. This table is authoritative and
-matches the settle table in `SKILL.md` and `references/commands.md` exactly —
-an agent reading any of the three must take the same action.
+Settle (`bskills pay <slug> --signature-hex <hex>`) signals recovery through its
+**exit code**:
 
 | Exit | Outcome | Cache | What to do |
 |---|---|---|---|
@@ -52,37 +50,3 @@ produced locally by the CLI and are stable.
 | Settle exits `4` (timeout, HTTP 504) | Broadcast not yet confirmed on-chain. | **Keep the cache** and re-run step 4 with the **same** `--signature-hex`. |
 | Settle exits `5` (reinitiate, HTTP 400) | Expired blockhash / on-chain reject / soft-expiry. | **Cache is cleared.** Re-initiate from step 2 for a fresh transaction. |
 | Backend reports broadcast/confirm error (insufficient lamports, no USDC ATA, etc.) | The signed tx reached the backend but Solana rejected it. The `message` field of the settle `--json` carries the reason. | Surface the message to the user; if a funding issue, ask them to top up SOL/USDC, then re-run from step 2. |
-
-## Recovery patterns
-
-**Cache went stale during user confirmation.** Common when OWS policy gating
-asks the user to approve out-of-band. If the cache soft-expires (settle exit
-`5`, ``Cached payment for "<slug>" expired …``), restart from step 2 — the
-unsigned bytes embed a blockhash Solana has since dropped from its
-recent-blockhashes window. The settle window is short; stay well under
-`expiresAt` between initiate and settle.
-
-**Broadcast confirmed-but-slow vs dead transaction.** A `504`/exit `4` means
-the backend broadcast your transaction but Solana hasn't confirmed it yet —
-**keep the cache and re-run the same `--signature-hex`.** A `400`/exit `5`
-means the transaction can never land (expired/rejected) — **the cache is
-cleared; re-initiate.** Never re-sign on an exit `4`, and never retry the same
-signature on an exit `5`.
-
-**Wrong wallet signed.** If the user has multiple OWS wallets, the
-`Transaction signer does not match the initiating payer` error means the wallet
-you resolved `$PAYER` from (step 2, `ows wallet list`) and the wallet you signed
-with (step 3, `ows sign tx --wallet …`) differ. Re-run with a consistent
-`--wallet` name.
-
-**Re-running step 2 without finishing step 4.** This silently overwrites the
-cached unsigned tx for the plugin (the cache holds one pending payment per
-plugin). That's fine — you'll just get a fresh prescription. But if you sign the
-OLD hex from the first run and try to settle, the splice rejects it because the
-cache now holds different bytes (`Transaction does not match the prescribed
-payment`). Sign whatever the **latest** `pay --wallet` produced.
-
-**Environment not ready.** Before initiating, run `bskills doctor [--wallet
-<name>]` — it checks auth, `ows` install, and a Solana wallet read-only. If a
-check fails, follow its `remediation` (e.g. `bskills login`, or
-`npm install -g @open-wallet-standard/core`) before touching `pay`.

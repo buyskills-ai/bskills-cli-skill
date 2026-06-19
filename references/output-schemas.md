@@ -164,6 +164,5 @@ succeeded on no agent. In `--json` mode a missing session is a hard error
 }
 ```
 
-To find owned-but-not-installed skills, filter `remote[*]` where
-`status === "completed"` and no entry in `installations[*]` has a matching
-`skillName` for the slug.
+To find owned-but-not-installed skills, filter `remote[*]` with a non-pending
+`status` (owned) and no matching `skillName` in `installations[*]`.
